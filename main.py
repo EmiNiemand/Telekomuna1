@@ -1,29 +1,28 @@
 import corrector as c
 
 
-# read file as bytes and encode
-# save result to encoded.txt file
+# wczytuje plik jako bajty i zakoduje
+# zapisuje wynik do encoded.txt
 def encode():
     input_file = open("message.txt", 'rb').read()
-    encoded_file = c.encode_bytes(bytearray(input_file))
+    encoded_file = c.encodeBytes(bytearray(input_file))
     output_file = open("encoded.txt", 'wb')
     output_file.write(encoded_file)
 
 
-# read file as bytes, correct bits and decode
-# save result to decoded.txt file
+# wczytuje plik jako bajty, poprawia bity i dekoduje
+# zapisuje wynik jako decoded,txt
 def decode():
     input_file = open("encoded.txt", 'rb').read()
-    encoded_file = c.correct_bytes(bytearray(input_file))
-    encoded_file = c.decode_bytes(encoded_file)
+    encoded_file = c.correctBytes(bytearray(input_file))
+    encoded_file = c.decodeBytes(encoded_file)
     output_file = open("decoded.txt", 'wb')
     output_file.write(encoded_file)
 
 
-# INFO
-# Input file name must be "message.txt"
-# Output file name after encoding is "encoded.txt";
-# Output file name after correction and decoding is "decoded.txt"
+# plik wejściowy musi mieć nazwę "message.txt"
+# po zakodowaniu plik wejściowy będzie miał nazwę "encoded.txt";
+# po korekcji bitów i zdekodowaniu plik będzie miał nazwę "decoded.txt"
 def main():
     in_string = str(input("Write '1' to encode or '2' to decode."))
     if in_string == '1':
