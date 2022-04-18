@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
+decoded.txt
+encoded.txt
 
 # C extensions
 *.so
