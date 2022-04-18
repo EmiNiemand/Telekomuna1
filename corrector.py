@@ -4,7 +4,7 @@ from bitarray import *
 
 # macierz, która spełnia dwa warunki:
 # 1. nie ma powtarzających się wierszy
-# 2. Każdy wiersz ma unikalną sumę wartości
+# 2. żaden wiersz nie jest równy sumie dwóch innych wierszy
 H_matrix = np.array((
     [1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
     [1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
@@ -42,7 +42,7 @@ def correctBytes(encoded_bytes):
     result = bytearray()
     for i in range(0, len(encoded_bytes), 2):
         byte_as_bits = encodedByteToBits(encoded_bytes[i], encoded_bytes[i + 1])
-        corrected_byte = bytearray(correct_byte(byte_as_bits).tobytes())
+        corrected_byte = bytearray(correctByte(byte_as_bits).tobytes())
 
         result.append(corrected_byte[0])
         result.append(corrected_byte[1])
@@ -99,7 +99,7 @@ def encodeByte(one_byte):
     return encoded_byte
 
 
-# zmieni bitarray na np.array który będzie zawierał int z bitów
+# zmieni bitarray na np.array który będzie zawierał int zamiast bitów
 def bitarrayToNparray(bits):
     result = []
     for i in range(len(bits)):
@@ -108,49 +108,44 @@ def bitarrayToNparray(bits):
     return np.array(result)
 
 
-# obliczy: H_matrix * np.array(coded_byte) % 2
+# zwraca prawdę jeśli error_matrix jest kolumną zer
+def checkCodedByte(error_matrix):
+    return np.count_nonzero(error_matrix) == 0
+
+
+# liczy: H_matrix * np.array(coded_byte) % 2
 # zwróci kolumnę równą jednej z macierzy matrix_H
 # jeśli jest jakiś uszkodzony bit
 # jeśli nie, to zwraca kolumnę zer
-def calculateSyndrome(coded_byte):
-    syndrome_array = bitarrayToNparray(coded_byte)
-    result: np.ndarray = H_matrix.dot(syndrome_array)
+# potem próbuje poprawić error_matrix
+def correctByte(coded_byte):
+    error_array = bitarrayToNparray(coded_byte)
+    error_matrix: np.ndarray = H_matrix.dot(error_array) % 2
 
-    return result % 2
-
-
-# zwraca prawdę jeśli syndrome jest kolumną zer
-def checkCodedByte(syndrome):
-    return np.count_nonzero(syndrome) == 0
-
-
-# liczy syndrome i potem próbuje poprawić go
-def correct_byte(coded_byte):
-    syndrome = calculateSyndrome(coded_byte)
     coded_byte_copy = coded_byte.copy()
 
-    if checkCodedByte(syndrome):
+    if checkCodedByte(error_matrix):
         return coded_byte
-    if correctOneBit(coded_byte_copy, syndrome) is not False:
-        return correctOneBit(coded_byte_copy, syndrome)
-    if correctTwoBits(coded_byte_copy, syndrome) is not False:
-        return correctTwoBits(coded_byte_copy, syndrome)
+    if correctOneBit(coded_byte_copy, error_matrix) is not False:
+        return correctOneBit(coded_byte_copy, error_matrix)
+    if correctTwoBits(coded_byte_copy, error_matrix) is not False:
+        return correctTwoBits(coded_byte_copy, error_matrix)
     else:
         print("Something went wrong")
         raise Exception
 
 
-# sprawdza czy syndrome ma odpowiadającą kolumnę w
+# sprawdza czy error_matrix ma odpowiadającą kolumnę w
 # transponowanej macierzy H_matrix
 # jeśli tak jest, to zmini bit na pozycji równej numerowi kolumniy
 # jeśli nie, to zwróci fałsz, co będzie oznaczało, że
 # prawdopodobnie jest więcej uszkodzonych bitów
-def correctOneBit(coded_byte, syndrome):
+def correctOneBit(coded_byte, error_matrix):
     i = 0
     for column in H_matrix.T:
-        # sprawdź czy odpowiadające wartości z syndrome i kolumny
+        # sprawdź czy odpowiadające wartości z error_matrix i kolumny
         # są równe
-        if np.equal(syndrome, column).all():
+        if np.equal(error_matrix, column).all():
             if coded_byte[i] == 1:
                 coded_byte[i] = 0
             else:
@@ -163,10 +158,10 @@ def correctOneBit(coded_byte, syndrome):
 
 # dodaje dwa wiersze H_matrix, potem wykonuje sum % 2
 # żeby upewnić się, że występują tylko wartości bitowe
-# jeśli syndrome i suma sa takie same,
+# jeśli error_matrix i suma sa takie same,
 # bity w coded_byte są poprawione na pozycjach column1 i column2
 # inaczej zwróci fałsz (prawdopodobnie jest więcej uszkodzonych bitów)
-def correctTwoBits(coded_byte, syndrome):
+def correctTwoBits(coded_byte, error_matrix):
     i = 0
     j = 0
     for column1 in H_matrix.T:
@@ -175,7 +170,7 @@ def correctTwoBits(coded_byte, syndrome):
                 continue
 
             sum = (column1 + column2) % 2
-            if np.equal(sum, syndrome).all():
+            if np.equal(sum, error_matrix).all():
                 if coded_byte[i] == 1:
                     coded_byte[i] = 0
                 else:
