@@ -24,12 +24,15 @@ def decode():
 # po zakodowaniu plik wejściowy będzie miał nazwę "encoded.txt";
 # po korekcji bitów i zdekodowaniu plik będzie miał nazwę "decoded.txt"
 def main():
-    in_string = str(input("Write '1' to encode or '2' to decode."))
-    if in_string == '1':
-        encode()
+    try:
+        user = str(input("Write '1' to encode or '2' to decode."))
+        if user == '1':
+            encode()
 
-    elif in_string == '2':
-        decode()
+        elif user == '2':
+            decode()
+    except:
+        print("Something goes wrong")
 
 
 if __name__ == "__main__":

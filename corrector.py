@@ -1,6 +1,12 @@
+import random
+
 import bitarray as bitarray
 import numpy as np
 from bitarray import *
+
+# stałe
+number_of_parity_bits = 8
+number_of_bits_in_byte = 8
 
 # macierz, która spełnia dwa warunki:
 # 1. nie ma powtarzających się wierszy
@@ -17,62 +23,61 @@ H_matrix = np.array((
 ))
 
 
+class CorrectingError(Exception):
+    pass
+
+
 # czyta bajty i szyfruje każdy z nich (encode_byte)
-def encodeBytes(bytes):
+def encodeBytes(byte_array: bytearray):
     result = bytearray()
-    for byte in bytes:
-        bits = byteToBits(byte)
-        encoded_byte = bytearray(encodeByte(bits).tobytes())
+    for byte in byte_array:
+        byte_as_bit_array = byteToBitArray(byte)
+        encoded_byte = bytearray(encodeByte(byte_as_bit_array).tobytes())
         result.append(encoded_byte[0])
         result.append(encoded_byte[1])
-
     return result
 
 
 # czyta co drugi bajt
-def decodeBytes(encoded_bytes):
-    return encoded_bytes[::2]
+def decodeBytes(encoded_byte_array: bytearray):
+    return encoded_byte_array[::2]
 
 
 # odczyta dwa bajty - bajt informacji i bajt chroniący
 # łączy to w bitarray
 # poprawi uszkodzone bity w bitarray (correct_byte)
 # i doda je na koniec wyniku
-def correctBytes(encoded_bytes):
+def correctBytes(encoded_byte_array: bytearray):
     result = bytearray()
-    for i in range(0, len(encoded_bytes), 2):
-        byte_as_bits = encodedByteToBits(encoded_bytes[i], encoded_bytes[i + 1])
-        corrected_byte = bytearray(correctByte(byte_as_bits).tobytes())
+    for i in range(0, len(encoded_byte_array), 2):
+        byte_as_bit_array = encodedByteToBitArray(encoded_byte_array[i], encoded_byte_array[i + 1])
+        corrected_byte = bytearray(correctByte(byte_as_bit_array).tobytes())
 
         result.append(corrected_byte[0])
         result.append(corrected_byte[1])
-
     return result
 
 
 # zmieni bajty na bity
-def byteToBits(byte):
+def byteToBitArray(byte: int) -> bitarray:
     result = ''
-    for i in range(8):
+    for i in range(number_of_bits_in_byte):
         result += str(byte % 2)
         byte = int(np.floor(byte / 2))
     return bitarray(result[::-1])
 
 
 # zmieni dwa bajty na jeden bitarray
-def encodedByteToBits(byte_one, byte_two):
-    byte_as_bits = bitarray()
+def encodedByteToBitArray(byte_one, byte_two) -> bitarray:
+    byte_as_bit_array = bitarray()
 
-    bits_one = byteToBits(byte_one)
-    bits_two = byteToBits(byte_two)
+    for j in range(number_of_bits_in_byte):
+        byte_as_bit_array.append(byteToBitArray(byte_one)[j])
 
-    for j in range(8):
-        byte_as_bits.append(bits_one[j])
+    for j in range(number_of_parity_bits):
+        byte_as_bit_array.append(byteToBitArray(byte_two)[j])
 
-    for j in range(8):
-        byte_as_bits.append(bits_two[j])
-
-    return byte_as_bits
+    return byte_as_bit_array
 
 
 # zaszyfruje bajty poprzez dodanie bitu parzystości:
@@ -82,35 +87,40 @@ def encodedByteToBits(byte_one, byte_two):
 # liczy bit parzystości:
 #   (new_matrix * T(new_array)) % 2
 # na koniec łączy oryginalny bajt z bitem parzystości
-def encodeByte(one_byte):
-    new_matrix = H_matrix[0:, :8]
-    new_array = bitarrayToNparray(one_byte)
+def encodeByte(one_byte: bitarray) -> bitarray:
+    hamming_matrix = H_matrix[0:, :number_of_parity_bits]
+    word_array = bitArrayToVector(one_byte)
 
-    parity_byte = new_matrix.dot(new_array.T)
+    parity_byte = hamming_matrix.dot(word_array.T)
     parity_byte %= 2
 
     encoded_byte = bitarray()
-    for i in range(8):
-        encoded_byte.append(new_array[i])
+    for i in range(number_of_bits_in_byte):
+        encoded_byte.append(word_array[i])
 
-    for i in range(8):
+    for i in range(number_of_parity_bits):
         encoded_byte.append(parity_byte[i])
 
     return encoded_byte
 
 
 # zmieni bitarray na np.array który będzie zawierał int zamiast bitów
-def bitarrayToNparray(bits):
+def bitArrayToVector(bits: bitarray) -> np.ndarray:
     result = []
     for i in range(len(bits)):
         result.append(int(bits[i]))
-
     return np.array(result)
 
 
+def calculateError(coded_byte) -> np.ndarray:
+    error_array = bitArrayToVector(coded_byte)
+    result: np.ndarray = H_matrix.dot(error_array)
+    return result % 2
+
+
 # zwraca prawdę jeśli error_matrix jest kolumną zer
-def checkCodedByte(error_matrix):
-    return np.count_nonzero(error_matrix) == 0
+def checkCodedByte(error_array: np.ndarray) -> bool:
+    return np.count_nonzero(error_array) == 0
 
 
 # liczy: H_matrix * np.array(coded_byte) % 2
@@ -118,21 +128,21 @@ def checkCodedByte(error_matrix):
 # jeśli jest jakiś uszkodzony bit
 # jeśli nie, to zwraca kolumnę zer
 # potem próbuje poprawić error_matrix
-def correctByte(coded_byte):
-    error_array = bitarrayToNparray(coded_byte)
-    error_matrix: np.ndarray = H_matrix.dot(error_array) % 2
-
+def correctByte(coded_byte: bitarray):
+    error_array = calculateError(coded_byte)
     coded_byte_copy = coded_byte.copy()
 
-    if checkCodedByte(error_matrix):
+    if checkCodedByte(error_array):
         return coded_byte
-    if correctOneBit(coded_byte_copy, error_matrix) is not False:
-        return correctOneBit(coded_byte_copy, error_matrix)
-    if correctTwoBits(coded_byte_copy, error_matrix) is not False:
-        return correctTwoBits(coded_byte_copy, error_matrix)
-    else:
-        print("Something went wrong")
-        raise Exception
+
+    try:
+        return tryCorrectOneBit(coded_byte_copy, error_array)
+    except CorrectingError:
+        pass
+    try:
+        return tryCorrectTwoBits(coded_byte_copy, error_array)
+    except CorrectingError:
+        raise CorrectingError()
 
 
 # sprawdza czy error_matrix ma odpowiadającą kolumnę w
@@ -140,20 +150,17 @@ def correctByte(coded_byte):
 # jeśli tak jest, to zmini bit na pozycji równej numerowi kolumniy
 # jeśli nie, to zwróci fałsz, co będzie oznaczało, że
 # prawdopodobnie jest więcej uszkodzonych bitów
-def correctOneBit(coded_byte, error_matrix):
+def tryCorrectOneBit(coded_byte: bitarray, error_array: np.ndarray):
     i = 0
     for column in H_matrix.T:
-        # sprawdź czy odpowiadające wartości z error_matrix i kolumny
-        # są równe
-        if np.equal(error_matrix, column).all():
-            if coded_byte[i] == 1:
-                coded_byte[i] = 0
-            else:
-                coded_byte[i] = 1
+        # check if corresponding values of syndrome and column
+        # are equal to each other
+        if np.equal(error_array, column).all():
+            coded_byte[i] ^= 1
             return coded_byte
         i += i
 
-    return False
+    raise CorrectingError()
 
 
 # dodaje dwa wiersze H_matrix, potem wykonuje sum % 2
@@ -161,27 +168,26 @@ def correctOneBit(coded_byte, error_matrix):
 # jeśli error_matrix i suma sa takie same,
 # bity w coded_byte są poprawione na pozycjach column1 i column2
 # inaczej zwróci fałsz (prawdopodobnie jest więcej uszkodzonych bitów)
-def correctTwoBits(coded_byte, error_matrix):
+def tryCorrectTwoBits(coded_byte: bitarray, error_array: np.ndarray):
     i = 0
     j = 0
-    for column1 in H_matrix.T:
+    for column in H_matrix.T:
         for column2 in H_matrix.T:
             if i == j:
                 continue
 
-            sum = (column1 + column2) % 2
-            if np.equal(sum, error_matrix).all():
-                if coded_byte[i] == 1:
-                    coded_byte[i] = 0
-                else:
-                    coded_byte[i] = 1
-                if coded_byte[j] == 1:
-                    coded_byte[j] = 0
-                else:
-                    coded_byte[j] = 1
+            sum_of_two_columns = (column + column2) % 2
+            if np.equal(sum_of_two_columns, error_array).all():
+                coded_byte[i] ^= 1
+                coded_byte[j] ^= 1
                 return coded_byte
             j += 1
         i += 1
         j = 0
 
-    return False
+    raise CorrectingError()
+
+
+# zwraca pierwsze 8 bitów arraya
+def decodeByte(coded_byte: bitarray) -> bitarray:
+    return coded_byte[:8]
